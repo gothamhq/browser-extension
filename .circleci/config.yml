@@ -1,0 +1,56 @@
+version: 2.1
+
+workflows:
+  main:
+    jobs:
+      - build:
+          filters:
+            tags:
+              only: /^\d+\.\d+\.\d+$/
+      - publish:
+          requires:
+            - build
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^\d+\.\d+\.\d+$/
+
+jobs:
+  build:
+    docker:
+      - image: cibuilds/chrome-extension:latest
+    steps:
+      - checkout
+      - run:
+          name: "Prepare Extension For Production"
+          command: |
+            if [[ $CIRCLE_TAG != "" ]];then
+              echo "Applying real version."
+              jq '.version = env.CIRCLE_TAG' manifest.json | sponge manifest.json
+            fi
+      - run:
+          name: "Filler - Proper CI/CD needs to be implemented."
+          command: echo "The start of our build process."
+      - run: apk add --no-cache zip
+      - run:
+          name: "Package Extension"
+          command: zip -r browser-extension.zip . -x *.git*
+      - persist_to_workspace:
+          root: /root/project
+          paths:
+            - browser-extension.zip
+
+  publish:
+    docker:
+      - image: cibuilds/chrome-extension:latest
+    environment:
+      - APP_ID: edmkpfdmophaaeedepooedlhioimljai
+    steps:
+      - attach_workspace:
+          at: /root/workspace
+      - store_artifacts:
+          path: "/root/workspace/browser-extension.zip"
+      - run:
+          name: "Publish to the Google Chrome Store"
+          command: publish /root/workspace/browser-extension.zip
